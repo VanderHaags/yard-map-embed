@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Sell Your Semi Truck</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map { height: 600px; width: 100%; margin-top: 10px; }
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #message { margin-top: 10px; font-weight: bold; color: #d9534f; }
+  </style>
+</head>
+<body>
+  <h2>Find your Nearest Vander Haag's Yard</h2>
+  <p>Enter your Zip Code</p>
+  <input type="text" id="zip" placeholder="e.g., 50313">
+  <button onclick="searchZip()">Submit</button>
+  <div id="message"></div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+
+  <script>
+    const map = L.map('map');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    const yards = [
+      { name: "Columbus, OH", lat: 39.882, lon: -83.450, address: "1499 US 42 NE, London, Ohio 43140" },
+      { name: "Council Bluffs, IA", lat: 41.229, lon: -95.798, address: "50200 189th Street, Council Bluffs, IA 51503" },
+      { name: "Kansas City, MO", lat: 39.056, lon: -94.492, address: "7501 E US Hwy 40, Kansas City, MO 64129" },
+      { name: "Winamac, IN", lat: 41.049, lon: -86.593, address: "495 E 150 S, Winamac, IN 46996" },
+      { name: "Sioux Falls, SD", lat: 43.594, lon: -96.702, address: "1423 East 54th St N, Sioux Falls, SD 57104" },
+      { name: "Des Moines, IA", lat: 41.628, lon: -93.600, address: "4444 Delaware Ave, Des Moines, IA 50313" },
+      { name: "Spencer, IA", lat: 43.150, lon: -95.182, address: "3809 4th Ave. West, Spencer, IA 51301" }
+    ];
+
+    // Fit map to all salvage locations with more padding (~300 mile view)
+    const bounds = L.latLngBounds(yards.map(yard => [yard.lat, yard.lon]));
+    map.fitBounds(bounds.pad(0.45));
+
+    function haversine(lat1, lon1, lat2, lon2) {
+      const R = 3958.8; // Radius of Earth in miles
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
+
+    // Always show all salvage yard markers with address on hover
+    yards.forEach(yard => {
+      const marker = L.marker([yard.lat, yard.lon]).addTo(map);
+      marker.bindTooltip(`${yard.address}`, { permanent: false, direction: 'top' });
+    });
+
+    async function searchZip() {
+      const zip = document.getElementById('zip').value;
+      const messageEl = document.getElementById('message');
+      messageEl.textContent = '';
+      if (!zip) return alert("Please enter a ZIP code.");
+      try {
+        const response = await axios.get(`https://nominatim.openstreetmap.org/search?postalcode=${zip}&country=USA&format=json`);
+        if (!response.data.length) return alert("ZIP code not found.");
+        const loc = response.data[0];
+        const lat = parseFloat(loc.lat);
+        const lon = parseFloat(loc.lon);
+
+        map.setView([lat, lon], 7);
+
+        map.eachLayer(layer => {
+          if (layer instanceof L.Circle) map.removeLayer(layer);
+        });
+
+        const circle = L.circle([lat, lon], { radius: 321868, color: 'blue', fillOpacity: 0.1 }).addTo(map); // 200 miles in meters
+
+        let found = false;
+        yards.forEach(yard => {
+          const dist = haversine(lat, lon, yard.lat, yard.lon);
+          if (dist <= 200) found = true;
+        });
+
+        if (!found) {
+          messageEl.innerHTML = "It looks like you are a bit outside of our ideal buying location, but please feel free to <a href='https://www.vanderhaags.com/sell.php' target='_blank' style='color:#d9534f;'>submit a bid request form</a> and we'll let you know if we're interested!";
+        }
+
+      } catch (err) {
+        alert("Error looking up ZIP code.");
+        console.error(err);
+      }
+    }
+  </script>
+</body>
+</html>
